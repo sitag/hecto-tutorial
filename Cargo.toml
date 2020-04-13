@@ -1,6 +1,6 @@
 [package]
-name = "hecto"
-version = "0.1.0"
+name = "editrs"
+version = "0.2.0"
 authors = ["Philipp Flenker <hello@philippflenker.com>"]
 edition = "2018"
 

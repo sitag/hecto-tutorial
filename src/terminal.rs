@@ -28,7 +28,7 @@ impl Terminal {
     pub fn size(&self) -> &Size {
         &self.size
     }
-    pub fn clear_screen() {
+    pub fn clear_screen2() {
         print!("{}", termion::clear::All);
     }
 
@@ -72,4 +72,10 @@ impl Terminal {
     pub fn reset_fg_color() {
         print!("{}", color::Fg(color::Reset));
     }
+    pub fn clear_screen(){
+        Terminal::clear_screen2();
+        //let bg = color::Rgb(39, 40, 34);
+        //print!("{}", color::Bg(bg));
+    }
+
 }

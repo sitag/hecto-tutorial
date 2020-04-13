@@ -19,10 +19,15 @@ use std::io::{Error, Write};
 
 const STATUS_FG_COLOR: color::Rgb = color::Rgb(63, 63, 63);
 const STATUS_BG_COLOR: color::Rgb = color::Rgb(239, 239, 239);
+//const STATUS_BG_COLOR: color::Rgb = color::Rgb(39, 40, 34);
+//const BG_COLOR: color::Rgb = color::Rgb(39, 40, 34);
+const BG_COLOR: color::Rgb = color::Rgb(239, 239, 239);
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const QUIT_TIMES: u8 = 3;
 const BACKUP_AT:u32 = 10;
 const CACHE_FILE:&str="tmp";
+
+const SET_BG:bool = false;
 
 
 #[derive(PartialEq, Copy, Clone)]
@@ -70,6 +75,7 @@ impl Editor {
                 die(error);
             }
             if self.should_quit {
+                Terminal::clear_screen();
                 break;
             }
             if let Err(error) = self.process_keypress() {
@@ -108,13 +114,11 @@ impl Editor {
         }
     }
 
+
     fn refresh_screen(&mut self) -> Result<(), std::io::Error> {
         Terminal::cursor_hide();
         Terminal::cursor_position(&Position::default());
-        if self.should_quit {
-            Terminal::clear_screen();
-            println!("goodbye cruel world.\r");
-        } else {
+        
             self.document.highlight(
                 &self.highlighted_word,
                 Some(
@@ -130,7 +134,7 @@ impl Editor {
                 x: self.cursor_position.x.saturating_sub(self.offset.x),
                 y: self.cursor_position.y.saturating_sub(self.offset.y),
             });
-        }
+        
         Terminal::cursor_show();
         Terminal::flush()
     }
@@ -372,7 +376,7 @@ impl Editor {
         self.cursor_position = Position { x, y }
     }
     fn draw_welcome_message(&self) {
-        let mut welcome_message = format!("Hecto editor -- version {}", VERSION);
+        let mut welcome_message = format!("editrs v{}", VERSION);
         let width = self.terminal.size().width as usize;
         let len = welcome_message.len();
         #[allow(clippy::integer_arithmetic, clippy::integer_division)]
@@ -393,6 +397,7 @@ impl Editor {
     fn draw_rows(&self) {
         let height = self.terminal.size().height;
         for terminal_row in 0..height {
+            //Terminal::set_bg_color(BG_COLOR);
             Terminal::clear_current_line();
             if let Some(row) = self
                 .document
@@ -405,6 +410,7 @@ impl Editor {
                 println!("~\r");
             }
         }
+        
     }
     fn draw_status_bar(&self) {
         let mut status;
@@ -438,13 +444,14 @@ impl Editor {
         status.push_str(&" ".repeat(width.saturating_sub(len)));
         status = format!("{}{}", status, line_indicator);
         status.truncate(width);
-        Terminal::set_bg_color(STATUS_BG_COLOR);
+        //Terminal::set_bg_color(BG_COLOR);
         Terminal::set_fg_color(STATUS_FG_COLOR);
         println!("{}\r", status);
         Terminal::reset_fg_color();
         Terminal::reset_bg_color();;
     }
     fn draw_message_bar(&self) {
+        //Terminal::set_bg_color(BG_COLOR);
         Terminal::clear_current_line();
         let message = &self.status_message;
         if Instant::now() - message.time < Duration::new(5, 0) {
@@ -452,6 +459,11 @@ impl Editor {
             text.truncate(self.terminal.size().width as usize);
             print!("{}", text);
         }
+        //for e in 1..5 {
+        //   Terminal::set_bg_color(BG_COLOR);
+        //    Terminal::clear_current_line();
+        //    println!("...");
+        //}
     }
     fn prompt<C>(&mut self, prompt: &str, mut callback: C) -> Result<Option<String>, std::io::Error>
     where
