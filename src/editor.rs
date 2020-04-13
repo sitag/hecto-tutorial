@@ -1,16 +1,29 @@
 use crate::Document;
 use crate::Row;
 use crate::Terminal;
+
+
+extern crate clipboard;
+
+use clipboard::ClipboardProvider;
+use clipboard::ClipboardContext;
+
 use std::env;
+use std::fs;
+
 use std::time::Duration;
 use std::time::Instant;
 use termion::color;
 use termion::event::Key;
+use std::io::{Error, Write};
 
 const STATUS_FG_COLOR: color::Rgb = color::Rgb(63, 63, 63);
 const STATUS_BG_COLOR: color::Rgb = color::Rgb(239, 239, 239);
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const QUIT_TIMES: u8 = 3;
+const BACKUP_AT:u32 = 10;
+const CACHE_FILE:&str="tmp";
+
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum SearchDirection {
@@ -46,6 +59,8 @@ pub struct Editor {
     status_message: StatusMessage,
     quit_times: u8,
     highlighted_word: Option<String>,
+    since_last_backup:u32,
+    editor_cache:String
 }
 
 impl Editor {
@@ -65,7 +80,7 @@ impl Editor {
     pub fn default() -> Self {
         let args: Vec<String> = env::args().collect();
         let mut initial_status =
-            String::from("HELP: Ctrl-F = find | Ctrl-S = save | Ctrl-Q = quit");
+            String::from("Ctrl-F:'find' | Ctrl-S:'save' | Ctrl-Q:'quit' | Ctrl-B:'temporary backup'");
 
         let document = if let Some(file_name) = args.get(1) {
             let doc = Document::open(file_name);
@@ -81,13 +96,15 @@ impl Editor {
 
         Self {
             should_quit: false,
-            terminal: Terminal::default().expect("Failed to initialize terminal"),
+            terminal: Terminal::default().expect("__could_not_initialize_terminal__"),
             document,
             cursor_position: Position::default(),
             offset: Position::default(),
             status_message: StatusMessage::from(initial_status),
             quit_times: QUIT_TIMES,
             highlighted_word: None,
+            since_last_backup: 0,
+            editor_cache: CACHE_FILE.to_string() 
         }
     }
 
@@ -96,7 +113,7 @@ impl Editor {
         Terminal::cursor_position(&Position::default());
         if self.should_quit {
             Terminal::clear_screen();
-            println!("Goodbye.\r");
+            println!("goodbye cruel world.\r");
         } else {
             self.document.highlight(
                 &self.highlighted_word,
@@ -119,20 +136,71 @@ impl Editor {
     }
     fn save(&mut self) {
         if self.document.file_name.is_none() {
-            let new_name = self.prompt("Save as: ", |_, _, _| {}).unwrap_or(None);
+            let new_name = self.prompt("__save_as__: ", |_, _, _| {}).unwrap_or(None);
             if new_name.is_none() {
-                self.status_message = StatusMessage::from("Save aborted.".to_string());
+                self.status_message = StatusMessage::from("__save_aborted__".to_string());
                 return;
             }
             self.document.file_name = new_name;
         }
 
         if self.document.save().is_ok() {
-            self.status_message = StatusMessage::from("File saved successfully.".to_string());
+            self.status_message = StatusMessage::from("__save_ok__".to_string());
         } else {
-            self.status_message = StatusMessage::from("Error writing file!".to_string());
+            self.status_message = StatusMessage::from("__error_saving__".to_string());
         }
     }
+    fn paste(&mut self){
+        let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
+        let data = ctx.get_contents().unwrap();
+        self.status_message = StatusMessage::from(format!("__pasteed__"));
+        for e in data.chars().rev() {
+            self.document.insert(&self.cursor_position, e);
+
+        }
+    }
+    fn backup(&mut self){
+        let doc = &self.document;
+        let cache_file = if let Some(fname) = &doc.file_name {
+            format!("{}.tmp", fname)
+        } else {
+            self.editor_cache.clone()
+        };
+        let mut file = fs::File::create(&cache_file).unwrap();
+        let data = doc.doc_read();
+        let mut all_ok = true;
+        for e in data  {
+            if let Ok(_) =  file.write_all(e.as_bytes()){
+              file.write_all(b"\n");
+            } else {
+              all_ok = false;
+            }
+        }
+        if all_ok {
+            self.status_message = StatusMessage::from(format!("__backed_up__:{}", &cache_file));
+            self.since_last_backup = 0;
+        }
+    }
+
+    fn command_mode(&mut self){
+        self.status_message = StatusMessage::from(format!("__command__"));
+        self.refresh_screen();
+        let mut command = String::new();
+        loop {
+            if let Ok(k) = Terminal::read_key() {
+                match k {
+                    Key::Char(c) => { 
+                        self.status_message = StatusMessage::from(format!("__char_read__:{}", &command));
+                        command.push(c);
+                        self.refresh_screen();
+                    },
+                    _ => break
+                }
+            }
+        }
+    }
+    
+
     fn search(&mut self) {
         let old_position = self.cursor_position.clone();
         let mut direction = SearchDirection::Forward;
@@ -173,6 +241,10 @@ impl Editor {
     }
     fn process_keypress(&mut self) -> Result<(), std::io::Error> {
         let pressed_key = Terminal::read_key()?;
+        self.since_last_backup += 1;
+        if self.since_last_backup >= BACKUP_AT {
+            self.backup();
+        }
         match pressed_key {
             Key::Ctrl('q') => {
                 if self.quit_times > 0 && self.document.is_dirty() {
@@ -187,6 +259,9 @@ impl Editor {
             }
             Key::Ctrl('s') => self.save(),
             Key::Ctrl('f') => self.search(),
+            Key::Ctrl('b') => self.backup(),
+            Key::Ctrl('v') => self.paste(),
+            Key::Ctrl('x') => self.command_mode(),
             Key::Char(c) => {
                 self.document.insert(&self.cursor_position, c);
                 self.move_cursor(Key::Right);

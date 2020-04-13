@@ -13,6 +13,9 @@ pub struct Row {
     len: usize,
 }
 
+
+
+
 impl From<&str> for Row {
     fn from(slice: &str) -> Self {
         Self {
@@ -25,6 +28,10 @@ impl From<&str> for Row {
 }
 
 impl Row {
+    pub fn as_string(&self) -> String {
+        self.string.clone()
+    }
+
     pub fn render(&self, start: usize, end: usize) -> String {
         let end = cmp::min(end, self.string.len());
         let start = cmp::min(start, end);

@@ -28,6 +28,14 @@ impl Document {
             file_type,
         })
     }
+    pub fn doc_read(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        for value in &self.rows {
+             lines.push(value.as_string()) 
+        }
+        lines
+        
+    }
     pub fn file_type(&self) -> String {
         self.file_type.name()
     }
